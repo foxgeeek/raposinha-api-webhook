@@ -4,35 +4,36 @@ const app = express();
 
 app.use(express.json());
 
-// Rota para receber os dados
+// Rota simplificada: Recebe qualquer coisa e envia para o n8n
 app.post('/webhook-trigger', async (req, res) => {
-    const { url, type } = req.body;
-
-    // Validação básica
-    if (!url || !['amazon', 'shopee'].includes(type)) {
-        return res.status(400).json({ error: 'URL ou Type (amazon/shopee) inválidos.' });
-    }
-
     try {
-        // O endereço do n8n deve vir de uma variável de ambiente no Easypanel
         const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
         if (!N8N_WEBHOOK_URL) {
-            return res.status(500).json({ error: 'Configuração do n8n ausente no servidor.' });
+            console.error('ERRO: Variável N8N_WEBHOOK_URL não definida.');
+            return res.status(500).json({ error: 'Configuração pendente no servidor.' });
         }
 
-        // Enviando para o n8n
-        await axios.post(N8N_WEBHOOK_URL, {
-            original_url: url,
-            store_type: type,
-            timestamp: new Date().toISOString(),
-            source: 'NodeJS-API'
+        // Repassa o body inteiro recebido + um timestamp
+        const dataToN8n = {
+            ...req.body,
+            received_at: new Date().toISOString()
+        };
+
+        // Envia para o n8n
+        await axios.post(N8N_WEBHOOK_URL, dataToN8n);
+
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Enviado ao n8n' 
         });
 
-        return res.status(200).json({ message: 'Dados enviados para o n8n com sucesso!' });
     } catch (error) {
-        console.error('Erro ao enviar para n8n:', error.message);
-        return res.status(500).json({ error: 'Falha ao comunicar com n8n.' });
+        console.error('Erro ao repassar para n8n:', error.message);
+        return res.status(500).json({ 
+            error: 'Falha ao comunicar com n8n',
+            details: error.message 
+        });
     }
 });
 
